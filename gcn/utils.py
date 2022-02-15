@@ -5,6 +5,8 @@ import scipy.sparse as sp
 from scipy.sparse.linalg.eigen.arpack import eigsh
 import sys
 
+from tensorflow.python.ops.gen_control_flow_ops import next_iteration_eager_fallback
+
 
 def parse_index_file(filename):
     """Parse index file."""
@@ -117,7 +119,8 @@ def preprocess_adj(adj):
     return sparse_to_tuple(adj_normalized)
 
 
-def construct_feed_dict(features, support, labels, labels_mask, placeholders):
+def construct_feed_dict(features, support, labels, labels_mask, placeholders, 
+      sex_mask_0=None, sex_mask_1=None, reg=None):
     """Construct feed dictionary."""
     feed_dict = dict()
     feed_dict.update({placeholders['labels']: labels})
@@ -125,6 +128,10 @@ def construct_feed_dict(features, support, labels, labels_mask, placeholders):
     feed_dict.update({placeholders['features']: features})
     feed_dict.update({placeholders['support'][i]: support[i] for i in range(len(support))})
     feed_dict.update({placeholders['num_features_nonzero']: features[1].shape})
+    if sex_mask_0 is not None:
+        feed_dict.update({placeholders['sex_mask_0']: sex_mask_0})
+        feed_dict.update({placeholders['sex_mask_1']: sex_mask_1})
+        feed_dict.update({placeholders['reg']: reg})
     return feed_dict
 
 

@@ -38,6 +38,8 @@ from gcn.utils import *
 from gcn.models import MLP, Deep_GCN
 import sklearn.metrics
 
+import numpy as np
+
 def get_train_test_masks(labels, idx_train, idx_val, idx_test):
     train_mask = sample_mask(idx_train, labels.shape[0])
     val_mask = sample_mask(idx_val, labels.shape[0])
@@ -55,6 +57,7 @@ def get_train_test_masks(labels, idx_train, idx_val, idx_test):
 
 def run_training(adj, features, labels, idx_train, idx_val, idx_test,
                  params, sex_data=None, stratify=False, fold_index=None,
+                 reg=None,
                  ):
     # Set random seed
     if fold_index != None: # HOLDOUT
@@ -94,6 +97,20 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
         get_train_test_masks(
         labels, idx_train, idx_val, idx_test)
 
+    sex_mask_0 = None
+    sex_mask_1 = None
+    if sex_data is not None:
+        sex_data_train = sex_data[idx_train]
+        #sex_idx_0 = idx_train[sex_data_train==0]
+        #sex_idx_1 = idx_train[sex_data_train==1]
+        #sex_mask_0 = np.zeros(labels.shape[0])
+        #sex_mask_0[sex_idx_0] = 1
+        #sex_mask_1 = np.zeros(labels.shape[0])
+        #sex_mask_1[sex_idx_1] = 1
+        sex_mask_0 = np.ones_like(sex_data_train) - sex_data_train
+        sex_mask_0 = sex_mask_0 * idx_train
+        sex_mask_1 = sex_data_train * idx_train
+
     # Some preprocessing
     features = preprocess_features(features)
     if FLAGS.model == 'gcn':
@@ -122,13 +139,20 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
         'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
         'labels_mask': tf.placeholder(tf.int32),
         'dropout': tf.placeholder_with_default(0., shape=()),
-        'num_features_nonzero': tf.placeholder(tf.int32)
+        'num_features_nonzero': tf.placeholder(tf.int32),
+        'sex_mask_0': tf.placeholder(tf.float32, shape=(None)),
+        'sex_mask_1': tf.placeholder(tf.float32, shape=(None)),
+        'reg': tf.placeholder(tf.float32),
     # helper variable for sparse dropout
     }
 
     # Create model
-    model = model_func(placeholders, input_dim=features[2][1],
-                       depth=FLAGS.depth, logging=True)
+    if sex_data is None:
+      model = model_func(placeholders, input_dim=features[2][1],
+                        depth=FLAGS.depth, logging=True)
+    else:
+      model = model_func(placeholders, input_dim=features[2][1],
+                        depth=FLAGS.depth, logging=True, regularizer=True)
 
     # Initialize session
     saver = tf.train.Saver()
@@ -176,10 +200,12 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
         if stratify:
             train_mask_str = get_stratified_data(y_train, idx_train, sex_data)
             feed_dict = construct_feed_dict(features, support, y_train,
-                                            train_mask_str, placeholders)
+                                            train_mask_str, placeholders, 
+                                            sex_mask_0, sex_mask_1, reg)
         else:
             feed_dict = construct_feed_dict(features, support, y_train,
-                                            train_mask, placeholders)
+                                            train_mask, placeholders,
+                                            sex_mask_0, sex_mask_1, reg)
 
         feed_dict.update({placeholders['dropout']: FLAGS.dropout,
                           placeholders['phase_train']: True})

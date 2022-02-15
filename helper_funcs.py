@@ -67,6 +67,8 @@ def get_roc_auc_safe(true, predicted):
         auc = sklearn.metrics.roc_auc_score(true, predicted)
     except ValueError:
         auc = np.nan
+    except IndexError:
+        auc = np.nan
     return auc
 
 
@@ -143,8 +145,12 @@ def get_auc_acc(y, pred, test, sex_data, population='all', abs_bias=True):
                 np.squeeze(test_y[test_sex_data[:, 0] == 1]) == 0]
         )
         n = sum(test_sex_data[:, 0] == 1)
-        n_asd = sum(test_y[test_sex_data[:, 0] == 1] == 1)[0]
-        n_neurotypical = sum(test_y[test_sex_data[:, 0] == 1] == 0)[0]
+        n_asd = sum(test_y[test_sex_data[:, 0] == 1] == 1)
+        if n_asd != 0:
+          n_asd = n_asd[0]
+        n_neurotypical = sum(test_y[test_sex_data[:, 0] == 1] == 0)
+        if n_neurotypical != 0:
+          n_neurotypical = n_neurotypical[0]
 
     if population == 'female':
         auc_test = get_roc_auc_safe(
@@ -170,8 +176,12 @@ def get_auc_acc(y, pred, test, sex_data, population='all', abs_bias=True):
                 np.squeeze(test_y[test_sex_data[:, 1] == 1]) == 0]
         )
         n = sum(test_sex_data[:, 1] == 1)
-        n_asd = sum(test_y[test_sex_data[:, 1] == 1] == 1)[0]
-        n_neurotypical = sum(test_y[test_sex_data[:, 1] == 1] == 0)[0]
+        n_asd = sum(test_y[test_sex_data[:, 1] == 1] == 1)
+        if n_asd != 0:
+          n_asd = n_asd[0]
+        n_neurotypical = sum(test_y[test_sex_data[:, 1] == 1] == 0)
+        if n_neurotypical != 0:
+          n_neurotypical = n_neurotypical[0]
 
     print('AUC', auc_test)
     print('acc', acc_test)
@@ -235,7 +245,7 @@ def process_scores(scores, y, sex_data, abs_bias=True):
 
 def run_cross_validation(strat_indices, graph, features, y, y_data, params,
                          subject_IDs, skf, num_nodes, sex_data=None,
-                         stratify=False, save=False):
+                         stratify=False, save=False, reg=1.):
     flags_dict = tf.flags.FLAGS._flags()
     keys_list = [keys for keys in flags_dict]
     for keys in keys_list:
@@ -257,6 +267,7 @@ def run_cross_validation(strat_indices, graph, features, y, y_data, params,
                         subject_IDs=subject_IDs,
                         sex_data=sex_data,
                         stratify=stratify,
+                        reg=reg
                     ),
                     zip(strat_indices, fold_indices)
                 )
@@ -276,6 +287,7 @@ def run_cross_validation(strat_indices, graph, features, y, y_data, params,
                         subject_IDs=subject_IDs,
                         sex_data=sex_data,
                         stratify=stratify,
+                        reg=reg
                     ),
                     # [(train_ind, test_ind, test_ind) for train_ind, test_ind in reversed(list(skf.split(np.zeros(num_nodes), np.squeeze(y))))]
                     strat_indices

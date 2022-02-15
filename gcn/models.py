@@ -1,5 +1,6 @@
 from gcn.layers import *
 from gcn.metrics import *
+import tensorflow
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -7,7 +8,7 @@ FLAGS = flags.FLAGS
 
 class Model(object):
     def __init__(self, **kwargs):
-        allowed_kwargs = {'name', 'logging'}
+        allowed_kwargs = {'name', 'logging', 'regularizer'}
         for kwarg in kwargs.keys():
             assert kwarg in allowed_kwargs, 'Invalid keyword argument: ' + kwarg
         name = kwargs.get('name')
@@ -17,6 +18,9 @@ class Model(object):
 
         logging = kwargs.get('logging', False)
         self.logging = logging
+
+        regularize = kwargs.get('regularizer', False)
+        self.regularize = regularize
 
         self.vars = {}
         self.placeholders = {}
@@ -152,6 +156,32 @@ class GCN(Model):
         # Cross entropy error
         self.loss += masked_softmax_cross_entropy(self.outputs, self.placeholders['labels'],
                                                   self.placeholders['labels_mask'])
+
+        # Regularuzation
+        if self.regularize:
+            self.loss += self._regularization_term()
+    
+    def _regularization_term(self):
+        pred = tensorflow.nn.softmax(self.outputs) #tensorflow.Variable(self.outputs[0], dtype=tf.float32, validate_shape=False).set_shape([2,])
+        # Regularization term (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6137441)
+        pred_0 = pred * self.placeholders['sex_mask_0']
+        pred_1 = pred * self.placeholders['sex_mask_1']
+
+        pred_mean_0 = tensorflow.math.reduce_mean(pred_0)
+        pred_mean_1 = tensorflow.math.reduce_mean(pred_1)
+        mean_0 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_0'])
+        mean_1 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_1'])
+
+        p_y = mean_0 * pred_mean_0 + mean_1 * pred_mean_1
+        p_neg_y = mean_0 * (1 - pred_mean_0) + mean_1 * (1 - pred_mean_1)
+
+        loss = tensorflow.math.reduce_sum(pred_0 * tensorflow.math.log(pred_mean_0 / p_y))
+        loss += tensorflow.math.reduce_sum(pred_1 * tensorflow.math.log(pred_mean_1 / p_y))
+
+        loss += ((1 - pred_0) * tensorflow.math.log((1 - pred_mean_0) / p_neg_y))
+        loss += ((1 - pred_1) * tensorflow.math.log((1 - pred_mean_1) / p_neg_y))
+        return self.placeholders['reg']*loss
+
 
     def _accuracy(self):
         self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],

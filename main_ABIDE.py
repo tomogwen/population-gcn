@@ -36,7 +36,7 @@ import train_GCN as Train
 # the GCN
 def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
                params, subject_IDs,
-               sex_data=None, stratify=False, fold_index=None
+               sex_data=None, stratify=False, fold_index=None, reg=None
                ):
     """
         train_ind       : indices of the training samples
@@ -101,7 +101,7 @@ def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
                                                       x_data).tolil(), y_data,
                                                   train_ind, val_ind,
                                                   test_ind, params, sex_data,
-                                                  stratify, fold_index)
+                                                  stratify, fold_index, reg=reg)
 
     print(test_acc)
 
@@ -116,7 +116,7 @@ def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
 def train_fold_thread(
         indices_tuple, fold_index=None, *, graph_feat, features, y, y_data,
         params, subject_IDs,
-        sex_data=None, stratify=False
+        sex_data, reg, stratify=False
 ):
     """
         indices tuple   : tuple of indices of the training, test,
@@ -152,7 +152,8 @@ def train_fold_thread(
         subject_IDs,
         sex_data,
         stratify,
-        fold_index
+        fold_index,
+        reg=reg
     )
     return pred, test_acc, test_auc, lin_acc, lin_auc, fold_size, test_ind, pred_train
 
