@@ -162,6 +162,7 @@ class GCN(Model):
             self.loss += self._regularization_term()
     
     def _regularization_term(self):
+#        return self.placeholders['reg']*self.loss
         pred = tensorflow.nn.softmax(self.outputs) #tensorflow.Variable(self.outputs[0], dtype=tf.float32, validate_shape=False).set_shape([2,])
         # Regularization term (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6137441)
         pred_0 = pred * self.placeholders['sex_mask_0']
