@@ -103,8 +103,6 @@ def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
                                                   test_ind, params, sex_data,
                                                   stratify, fold_index, reg=reg)
 
-    print(test_acc)
-
     # return number of correctly classified samples instead of percentage
     test_acc = int(round(test_acc * len(test_ind)))
     lin_acc = int(round(lin_acc * len(test_ind)))
@@ -114,9 +112,9 @@ def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
 
 # For compatibility with Pool.map
 def train_fold_thread(
-        indices_tuple, fold_index=None, *, graph_feat, features, y, y_data,
+        indices_tuple, sex_data=None, fold_index=None, *, graph_feat, features, y, y_data,
         params, subject_IDs,
-        sex_data, reg, stratify=False
+        reg, stratify=False
 ):
     """
         indices tuple   : tuple of indices of the training, test,

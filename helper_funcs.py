@@ -4,7 +4,7 @@ import pandas as pd
 import tensorflow.compat.v1 as tf
 from functools import partial
 from multiprocessing import Pool
-from main_ABIDE import train_fold_thread
+from main_ABIDE import train_fold_thread, train_fold
 
 
 def compute_error_and_bias(y_true, y_pred, a, absolute_value=True):
@@ -252,6 +252,11 @@ def run_cross_validation(strat_indices, graph, features, y, y_data, params,
         tf.flags.FLAGS.__delattr__(keys)
     tf.app.flags.DEFINE_string('f', '', 'kernel')
 
+    if sex_data is not None:
+      sex_data_repeated = [sex_data.copy() for _ in range(10)]
+    else:
+      sex_data_repeated = [None for _ in range(10)]
+
     if save == True:  # To save weights of a trained model
         fold_indices = range(10)
         with Pool(processes=10) as process_pool:
@@ -265,18 +270,17 @@ def run_cross_validation(strat_indices, graph, features, y, y_data, params,
                         y_data=y_data,
                         params=params,
                         subject_IDs=subject_IDs,
-                        sex_data=sex_data,
                         stratify=stratify,
                         reg=reg
                     ),
-                    zip(strat_indices, fold_indices)
+                    zip(strat_indices, sex_data_repeated, fold_indices)
                 )
             )
 
     else:
         with Pool(processes=10) as process_pool:
             scores = list(
-                process_pool.map(
+                process_pool.starmap(
                     partial(
                         train_fold_thread,
                         graph_feat=graph,
@@ -285,14 +289,68 @@ def run_cross_validation(strat_indices, graph, features, y, y_data, params,
                         y_data=y_data,
                         params=params,
                         subject_IDs=subject_IDs,
-                        sex_data=sex_data,
                         stratify=stratify,
                         reg=reg
                     ),
                     # [(train_ind, test_ind, test_ind) for train_ind, test_ind in reversed(list(skf.split(np.zeros(num_nodes), np.squeeze(y))))]
-                    strat_indices
+                    zip(strat_indices, sex_data_repeated)
                 )
             )
+
+    # print(stratify)
+
+    return scores
+
+def run_cross_validation22(strat_indices, graph, features, y, y_data, params,
+                         subject_IDs, skf, num_nodes, sex_data=None,
+                         stratify=False, save=False, reg=1.):
+
+    scores = []
+    if save == True:  # To save weights of a trained model
+        for fold in range(10):
+          flags_dict = tf.flags.FLAGS._flags()
+          keys_list = [keys for keys in flags_dict]
+          for keys in keys_list:
+              tf.flags.FLAGS.__delattr__(keys)
+          tf.app.flags.DEFINE_string('f', '', 'kernel')
+          scores.append(train_fold(
+                strat_indices[fold][0], 
+                strat_indices[fold][1], 
+                strat_indices[fold][2],
+                sex_data=sex_data,
+                fold_index=fold,
+                graph_feat=graph,
+                features=features,
+                y=y,
+                y_data=y_data,
+                params=params,
+                subject_IDs=subject_IDs,
+                stratify=stratify,
+                reg=reg
+            )
+          )
+    else:
+        for fold in range(10):
+          flags_dict = tf.flags.FLAGS._flags()
+          keys_list = [keys for keys in flags_dict]
+          for keys in keys_list:
+              tf.flags.FLAGS.__delattr__(keys)
+          tf.app.flags.DEFINE_string('f', '', 'kernel')
+          scores.append(train_fold(
+                strat_indices[fold][0], 
+                strat_indices[fold][1], 
+                strat_indices[fold][2],
+                sex_data=sex_data,
+                graph_feat=graph,
+                features=features,
+                y=y,
+                y_data=y_data,
+                params=params,
+                subject_IDs=subject_IDs,
+                stratify=stratify,
+                reg=reg
+            )
+          )
 
     # print(stratify)
 

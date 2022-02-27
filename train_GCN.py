@@ -99,17 +99,14 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
 
     sex_mask_0 = None
     sex_mask_1 = None
+    # if sex_data is not None:
+    #     sex_data_train = sex_data[idx_train]
+    #     sex_mask_0 = np.ones_like(sex_data_train) - sex_data_train
+    #     sex_mask_0 = sex_mask_0 * idx_train
+    #     sex_mask_1 = sex_data_train * idx_train
     if sex_data is not None:
-        sex_data_train = sex_data[idx_train]
-        #sex_idx_0 = idx_train[sex_data_train==0]
-        #sex_idx_1 = idx_train[sex_data_train==1]
-        #sex_mask_0 = np.zeros(labels.shape[0])
-        #sex_mask_0[sex_idx_0] = 1
-        #sex_mask_1 = np.zeros(labels.shape[0])
-        #sex_mask_1[sex_idx_1] = 1
-        sex_mask_0 = np.ones_like(sex_data_train) - sex_data_train
-        sex_mask_0 = sex_mask_0 * idx_train
-        sex_mask_1 = sex_data_train * idx_train
+        sex_mask_0 = np.ones_like(sex_data) - sex_data
+        sex_mask_1 = sex_data
 
     # Some preprocessing
     features = preprocess_features(features)
@@ -134,15 +131,18 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
                     range(num_supports)],
         'features': tf.sparse_placeholder(tf.float32,
                                           shape=tf.constant(features[2],
-                                                            dtype=tf.int64)),
-        'phase_train': tf.placeholder_with_default(False, shape=()),
-        'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1])),
-        'labels_mask': tf.placeholder(tf.int32),
-        'dropout': tf.placeholder_with_default(0., shape=()),
-        'num_features_nonzero': tf.placeholder(tf.int32),
-        'sex_mask_0': tf.placeholder(tf.float32, shape=(None)),
-        'sex_mask_1': tf.placeholder(tf.float32, shape=(None)),
-        'reg': tf.placeholder(tf.float32),
+                                                            dtype=tf.int64),
+                                          name="features"),
+        'phase_train': tf.placeholder_with_default(False, shape=(), 
+            name='phase_train'),
+        'labels': tf.placeholder(tf.float32, shape=(None, y_train.shape[1]),
+            name='labels'),
+        'labels_mask': tf.placeholder(tf.int32, name='labels_mask'),
+        'dropout': tf.placeholder_with_default(0., shape=(), name='dropout'),
+        'num_features_nonzero': tf.placeholder(tf.int32, name='nf_nonzero'),
+        'sex_mask_0': tf.placeholder(tf.float32, shape=(None), name='sex_mask_0'),
+        'sex_mask_1': tf.placeholder(tf.float32, shape=(None), name='sex_mask_1'),
+        'reg': tf.placeholder_with_default(1., shape=(), name='reg'),
     # helper variable for sparse dropout
     }
 
@@ -206,6 +206,7 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
             feed_dict = construct_feed_dict(features, support, y_train,
                                             train_mask, placeholders,
                                             sex_mask_0, sex_mask_1, reg)
+        print(feed_dict)
 
         feed_dict.update({placeholders['dropout']: FLAGS.dropout,
                           placeholders['phase_train']: True})

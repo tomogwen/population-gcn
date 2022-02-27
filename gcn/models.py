@@ -159,30 +159,37 @@ class GCN(Model):
 
         # Regularuzation
         if self.regularize:
-            self.loss += self._regularization_term()
+            self.loss += self._regularization_term(self.outputs)
     
-    def _regularization_term(self):
-#        return self.placeholders['reg']*self.loss
-        pred = tensorflow.nn.softmax(self.outputs) #tensorflow.Variable(self.outputs[0], dtype=tf.float32, validate_shape=False).set_shape([2,])
+    def _regularization_term(self, outputs):
+        #return self.placeholders['reg']*self.loss
+        pred = tensorflow.nn.softmax(outputs) #tensorflow.Variable(self.outputs[0], dtype=tf.float32, validate_shape=False).set_shape([2,])
         # Regularization term (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6137441)
-        pred_0 = pred * self.placeholders['sex_mask_0']
-        pred_1 = pred * self.placeholders['sex_mask_1']
+        outputs_0 = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_0'], outputs)
+        outputs_1 = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_1'], outputs)
+        pred_mean_0 = tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_0, 0))[0]
+        pred_mean_1 = tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_1, 0))[0]
+        
+        pred_0 = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_0'], pred) # pred * self.placeholders['sex_mask_0']
+        pred_1 = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_1'], pred)
+        
+        s_mean_0 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_0'])
+        s_mean_1 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_1'])
+        p_y = s_mean_0 * pred_mean_0 + s_mean_1 * pred_mean_1
+        p_neg_y = s_mean_0 * (1 - pred_mean_0) + s_mean_1 * (1 - pred_mean_1)
 
-        pred_mean_0 = tensorflow.math.reduce_mean(pred_0)
-        pred_mean_1 = tensorflow.math.reduce_mean(pred_1)
-        mean_0 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_0'])
-        mean_1 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_1'])
+        loss = tensorflow.math.reduce_sum(pred_0[:,0] * tensorflow.math.log(pred_mean_0 / p_y))
+        loss += tensorflow.math.reduce_sum(pred_1[:,0] * tensorflow.math.log(pred_mean_1 / p_y))
 
-        p_y = mean_0 * pred_mean_0 + mean_1 * pred_mean_1
-        p_neg_y = mean_0 * (1 - pred_mean_0) + mean_1 * (1 - pred_mean_1)
+        loss += tensorflow.math.reduce_sum(pred_0[:,1] * tensorflow.math.log((1 - pred_mean_0) / p_neg_y))
+        loss += tensorflow.math.reduce_sum(pred_1[:,1] * tensorflow.math.log((1 - pred_mean_1) / p_neg_y))
 
-        loss = tensorflow.math.reduce_sum(pred_0 * tensorflow.math.log(pred_mean_0 / p_y))
-        loss += tensorflow.math.reduce_sum(pred_1 * tensorflow.math.log(pred_mean_1 / p_y))
-
-        loss += ((1 - pred_0) * tensorflow.math.log((1 - pred_mean_0) / p_neg_y))
-        loss += ((1 - pred_1) * tensorflow.math.log((1 - pred_mean_1) / p_neg_y))
         return self.placeholders['reg']*loss
-
+        
 
     def _accuracy(self):
         self.accuracy = masked_accuracy(self.outputs, self.placeholders['labels'],
