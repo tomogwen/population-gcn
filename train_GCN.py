@@ -173,7 +173,8 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
     def evaluate(feats, graph, label, mask, placeholder):
         t_test = time.time()
         feed_dict_val = construct_feed_dict(feats, graph, label, mask,
-                                            placeholder)
+                                            placeholder, sex_mask_0, sex_mask_1, 
+                                            reg)
         feed_dict_val.update({placeholder['phase_train'].name: False})
         outs_val = sess.run([model.loss, model.accuracy, model.predict()],
                             feed_dict=feed_dict_val)
@@ -206,7 +207,6 @@ def run_training(adj, features, labels, idx_train, idx_val, idx_test,
             feed_dict = construct_feed_dict(features, support, y_train,
                                             train_mask, placeholders,
                                             sex_mask_0, sex_mask_1, reg)
-        print(feed_dict)
 
         feed_dict.update({placeholders['dropout']: FLAGS.dropout,
                           placeholders['phase_train']: True})

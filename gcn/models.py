@@ -1,3 +1,4 @@
+from numpy import promote_types
 from gcn.layers import *
 from gcn.metrics import *
 import tensorflow
@@ -161,7 +162,7 @@ class GCN(Model):
         if self.regularize:
             self.loss += self._regularization_term(self.outputs)
     
-    def _regularization_term(self, outputs):
+    def _regularization_term_old(self, outputs):
         #return self.placeholders['reg']*self.loss
         pred = tensorflow.nn.softmax(outputs) #tensorflow.Variable(self.outputs[0], dtype=tf.float32, validate_shape=False).set_shape([2,])
         # Regularization term (https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=6137441)
@@ -169,8 +170,10 @@ class GCN(Model):
           self.placeholders['sex_mask_0'], outputs)
         outputs_1 = tensorflow.einsum('n,nm->nm', 
           self.placeholders['sex_mask_1'], outputs)
-        pred_mean_0 = tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_0, 0))[0]
-        pred_mean_1 = tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_1, 0))[0]
+        pred_mean_0 = tensorflow.math.reduce_mean(tensorflow.nn.softmax(outputs_0), 0)[0]  
+        #tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_0, 0))[0]
+        pred_mean_1 = tensorflow.math.reduce_mean(tensorflow.nn.softmax(outputs_1), 0)[0] 
+        #tensorflow.nn.softmax(tensorflow.math.reduce_mean(outputs_1, 0))[0]
         
         pred_0 = tensorflow.einsum('n,nm->nm', 
           self.placeholders['sex_mask_0'], pred) # pred * self.placeholders['sex_mask_0']
@@ -180,15 +183,80 @@ class GCN(Model):
         s_mean_0 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_0'])
         s_mean_1 = tensorflow.math.reduce_mean(self.placeholders['sex_mask_1'])
         p_y = s_mean_0 * pred_mean_0 + s_mean_1 * pred_mean_1
-        p_neg_y = s_mean_0 * (1 - pred_mean_0) + s_mean_1 * (1 - pred_mean_1)
 
         loss = tensorflow.math.reduce_sum(pred_0[:,0] * tensorflow.math.log(pred_mean_0 / p_y))
         loss += tensorflow.math.reduce_sum(pred_1[:,0] * tensorflow.math.log(pred_mean_1 / p_y))
 
-        loss += tensorflow.math.reduce_sum(pred_0[:,1] * tensorflow.math.log((1 - pred_mean_0) / p_neg_y))
-        loss += tensorflow.math.reduce_sum(pred_1[:,1] * tensorflow.math.log((1 - pred_mean_1) / p_neg_y))
+        loss += tensorflow.math.reduce_sum(pred_0[:,1] * tensorflow.math.log((1. - pred_mean_0) / (1. - p_y)))
+        loss += tensorflow.math.reduce_sum(pred_1[:,1] * tensorflow.math.log((1. - pred_mean_1) / (1. - p_y)))
 
         return self.placeholders['reg']*loss
+
+    def _regularization_term(self, outputs):
+        # For the mutual information, 
+        # Pr[y|s] = sum{(xi,si),si=s} sigma(xi,si) / #D[xs]
+        outputs = tensorflow.math.sigmoid(outputs)
+        output_m = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_0'], outputs)
+        output_f = tensorflow.einsum('n,nm->nm', 
+          self.placeholders['sex_mask_1'], outputs)
+        #D[xs]
+        N_male = tensorflow.math.reduce_sum(self.placeholders['sex_mask_0'])
+        N_female = tensorflow.math.reduce_sum(self.placeholders['sex_mask_1'])
+        Dxisi = tensorflow.stack((N_male,N_female),axis=0)
+        # Pr[y|s]
+        y_pred_female = tensorflow.math.reduce_sum(output_f)
+        y_pred_male   = tensorflow.math.reduce_sum(output_m)
+        P_ys = tensorflow.stack((y_pred_male,y_pred_female),axis=0) / Dxisi
+        # Pr[y]
+        P = tensorflow.concat((output_f,output_m), 0)
+        #P_y = tensorflow.math.reduce_sum(P) / (x_female.shape[0]+x_male.shape[0])
+        P_y = tensorflow.math.reduce_sum(P) / (N_female+N_male)
+        # P(siyi)
+        P_s1y1 = tensorflow.math.log(P_ys[1]) - tensorflow.math.log(P_y)
+        P_s1y0 = tensorflow.math.log(1-P_ys[1]) - tensorflow.math.log(1-P_y)
+        P_s0y1 = tensorflow.math.log(P_ys[0]) - tensorflow.math.log(P_y)
+        P_s0y0 = tensorflow.math.log(1-P_ys[0]) - tensorflow.math.log(1-P_y)
+        # PI
+        PI_s1y1 = output_f * P_s1y1
+        PI_s1y0 =(1- output_f) * P_s1y0
+        PI_s0y1 = output_m * P_s0y1
+        PI_s0y0 = (1- output_m )* P_s0y0
+        PI = tensorflow.math.reduce_sum(PI_s1y1) + tensorflow.math.reduce_sum(PI_s1y0) + tensorflow.math.reduce_sum(PI_s0y1) + tensorflow.math.reduce_sum(PI_s0y0)
+        PI = self.placeholders['reg'] * PI
+        return PI
+
+# class PRLoss():#using linear
+#      def __init__(self, eta=1.0):
+#         super(PRLoss, self).__init__()
+#         self.eta = eta
+#      def forward(self,output_f,output_m):
+#         # For the mutual information, 
+#         # Pr[y|s] = sum{(xi,si),si=s} sigma(xi,si) / #D[xs]
+#         #D[xs]
+#         N_female = t.tensor(output_f.shape[0])
+#         N_male   = t.tensor(output_m.shape[0])
+#         Dxisi = t.stack((N_male,N_female),axis=0) #male sample, #female sample
+#         # Pr[y|s]
+#         y_pred_female = t.sum(output_f)
+#         y_pred_male   = t.sum(output_m)
+#         P_ys = t.stack((y_pred_male,y_pred_female),axis=0) / Dxisi
+#         # Pr[y]
+#         P = t.cat((output_f,output_m),0)
+#         P_y = t.sum(P) / (x_female.shape[0]+x_male.shape[0])
+#         # P(siyi)
+#         P_s1y1 = t.log(P_ys[1]) - t.log(P_y)
+#         P_s1y0 = t.log(1-P_ys[1]) - t.log(1-P_y)
+#         P_s0y1 = t.log(P_ys[0]) - t.log(P_y)
+#         P_s0y0 = t.log(1-P_ys[0]) - t.log(1-P_y)
+#         # PI
+#         PI_s1y1 = output_f * P_s1y1
+#         PI_s1y0 =(1- output_f) * P_s1y0
+#         PI_s0y1 = output_m * P_s0y1
+#         PI_s0y0 = (1- output_m )* P_s0y0
+#         PI = t.sum(PI_s1y1) + t.sum(PI_s1y0) + t.sum(PI_s0y1) + t.sum(PI_s0y0)
+#         PI = self.eta * PI
+#         return PI
         
 
     def _accuracy(self):
