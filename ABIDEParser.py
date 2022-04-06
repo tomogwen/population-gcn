@@ -142,11 +142,14 @@ def get_ids(num_subjects=None):
 def get_subject_score(subject_list, score):
     scores_dict = {}
 
+    # gets list of subject IDs and score='SITE_ID'
     with open(phenotype) as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
             if row['SUB_ID'] in subject_list:
                 scores_dict[row['SUB_ID']] = row[score]
+                # if the subject ID is in our training list
+                # then add {Training subject ID : site ID} to scores_dict
 
     return scores_dict
 
@@ -188,10 +191,18 @@ def site_percentage(train_ind, perc, subject_list):
         labeled_indices      : indices of the subset of training samples
     """
 
-    train_list = subject_list[train_ind]
-    sites = get_subject_score(train_list, score='SITE_ID')
-    unique = np.unique(list(sites.values())).tolist()
+    train_list = subject_list[train_ind] # list of subject IDs that are the training set
+    sites = get_subject_score(train_list, score='SITE_ID') # sites is a dict of {subject ID: site ID}
+    unique = np.unique(list(sites.values())).tolist() # unique is the unique sites in the training set
     site = np.array([unique.index(sites[train_list[x]]) for x in range(len(train_list))])
+
+    '''
+    for subject_id in list_of_training_subject_ids:
+        element = unique.index(sites[subject_id]) # finds the index of the site for each subject id in the unique list
+        list.append(element)
+    
+    so site is a list of indices to sites 
+    '''
 
     labeled_indices = []
 

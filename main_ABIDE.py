@@ -68,8 +68,12 @@ def train_fold(train_ind, val_ind, test_ind, graph_feat, features, y, y_data,
 
     # selection of a subset of data if running experiments with a subset of
     # the training set
-    labeled_ind = Reader.site_percentage(train_ind, params['num_training'],
-                                         subject_IDs)
+    # when this is 100% (which it is) it doesn't actually do anything
+    if subject_IDs is None:
+        labeled_ind = train_ind
+    else:
+        labeled_ind = Reader.site_percentage(train_ind, params['num_training'],
+                                             subject_IDs)
 
     # feature selection/dimensionality reduction step
     x_data = Reader.feature_selection(features, y, labeled_ind,
